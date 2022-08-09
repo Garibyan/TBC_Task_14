@@ -7,10 +7,12 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.viewModels
-import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.garibyan.armen.tbc_task_14.R
 import com.garibyan.armen.tbc_task_14.databinding.FragmentMainBinding
+import com.garibyan.armen.tbc_task_14.extentions.collectLatestLifecycleFlow
+import com.garibyan.armen.tbc_task_14.network.News
+import com.garibyan.armen.tbc_task_14.screens.ScreenState
 import com.garibyan.armen.tbc_task_14.viewModels.MainViewModel
 
 class MainFragment : Fragment() {
@@ -27,65 +29,66 @@ class MainFragment : Fragment() {
         return binding!!.root
     }
 
-
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-
         stateListener()
-        onClicklisteners()
+        onClickListeners()
     }
 
-    private fun onClicklisteners() = with(binding!!) {
+    private fun onClickListeners() = with(binding!!) {
         root.setOnRefreshListener {
             viewModel.getNews()
             root.isRefreshing = false
         }
     }
 
-    private fun stateListener() {
-        viewLifecycleOwner.lifecycleScope.launchWhenStarted {
-            viewModel.modelState.collect {
-                when (it) {
-                    is MainViewModel.ModelState.Success -> {
-                        modelAdapter.submitList(it.newsList.content)
-                        successViewState()
-                        Log.d("MODEL_STATE", "Success")
-                        Log.d("RESPONSE_MODEL", it.newsList.toString())
-                    }
-                    is MainViewModel.ModelState.Error -> {
-                        errorViewState()
-                        Log.d("MODEL_STATE", "Error")
-
-                    }
-                    is MainViewModel.ModelState.Loading -> {
-                        loadingViewState()
-                        Log.d("MODEL_STATE", "Loading")
-                    }
+    private fun stateListener(){
+        collectLatestLifecycleFlow(viewModel.newsState){
+            when(it){
+                is ScreenState.Success ->{
+                    successViewState(it.data)
+                    Log.d("MODEL_STATE", "Success")
+                    Log.d("RESPONSE_MODEL", it.data.toString())
+                }
+                is ScreenState.Loading ->{
+                    loadingViewState()
+                    Log.d("MODEL_STATE", "Loading")
+                }
+                is ScreenState.Error -> {
+                    errorViewState()
+                    Log.d("MODEL_STATE", "Error")
                 }
             }
         }
     }
 
-    private fun successViewState() = with(binding!!) {
+    private fun successViewState(list: List<News>) = with(binding!!) {
         binding!!.newsRecyclerView.apply {
             layoutManager = LinearLayoutManager(requireContext())
             adapter = modelAdapter
             visibility = View.VISIBLE
+            modelAdapter.submitList(list)
         }
-        progressBar.visibility = View.GONE
-        tvState.visibility = View.GONE
+        View.GONE.also {
+            tvState.visibility = it
+            progressBar.visibility = it
+        }
     }
 
     private fun loadingViewState() = with(binding!!) {
         newsRecyclerView.visibility = View.GONE
-        progressBar.visibility = View.VISIBLE
-        tvState.visibility = View.VISIBLE
         tvState.text = requireContext().getString(R.string.loading)
+        View.VISIBLE.also {
+            progressBar.visibility = it
+            tvState.visibility = it
+        }
     }
 
     private fun errorViewState() = with(binding!!) {
-        newsRecyclerView.visibility = View.GONE
-        progressBar.visibility = View.GONE
+        View.GONE.also {
+            newsRecyclerView.visibility = it
+            progressBar.visibility = it
+        }
         tvState.visibility = View.VISIBLE
         tvState.text = requireContext().getString(R.string.error)
     }
@@ -95,3 +98,4 @@ class MainFragment : Fragment() {
         binding = null
     }
 }
+
